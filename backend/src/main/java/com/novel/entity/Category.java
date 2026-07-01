@@ -2,6 +2,7 @@ package com.novel.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
+import java.time.LocalDateTime;
 
 @Data
 @TableName("categories")
@@ -10,4 +11,5 @@ public class Category {
     private Long id;
     private String name;
     private Integer sort;
+    private LocalDateTime createdAt;
 }

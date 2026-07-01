@@ -15,10 +15,10 @@ public class Novel {
     private String intro;
     private Integer wordCount;
     private String status;
-    private Long clickCount;
-    private Long collectCount;
+    private Integer clickCount;
+    private Integer collectCount;
     @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createTime;
+    private LocalDateTime createdAt;
     @TableField(fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updateTime;
+    private LocalDateTime updatedAt;
 }

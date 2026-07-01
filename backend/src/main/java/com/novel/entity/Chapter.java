@@ -11,10 +11,9 @@ public class Chapter {
     private Long id;
     private Long novelId;
     private String title;
-    @TableField("content")
     private String content;
     private Integer wordCount;
     private Integer chapterNo;
     @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createTime;
+    private LocalDateTime createdAt;
 }

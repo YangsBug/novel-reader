@@ -14,7 +14,6 @@ public class ReadingProgress {
     private Long chapterId;
     private Integer chapterNo;
     private Integer pageOffset;
-    private Integer isCurrent;
     @TableField(fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updateTime;
+    private LocalDateTime updatedAt;
 }

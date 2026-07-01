@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import MainLayout from '@/components/layout/MainLayout'
 import HomePage from '@/pages/HomePage'
@@ -10,8 +11,16 @@ import HistoryPage from '@/pages/HistoryPage'
 import ProfilePage from '@/pages/ProfilePage'
 import LoginPage from '@/pages/LoginPage'
 import ProtectedRoute from '@/components/common/ProtectedRoute'
+import { useAuthStore } from '@/store/authStore'
+import Loading from '@/components/common/Loading'
 
 export default function App() {
+  const { init, isLoading } = useAuthStore()
+
+  useEffect(() => { init() }, [init])
+
+  if (isLoading) return <Loading text="加载中…" />
+
   return (
     <Routes>
       <Route element={<MainLayout />}>

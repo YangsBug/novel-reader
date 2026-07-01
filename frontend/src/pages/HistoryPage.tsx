@@ -7,11 +7,11 @@ import Loading from '@/components/common/Loading'
 
 export default function HistoryPage() {
   const navigate = useNavigate()
-  const { isLoggedIn } = useAuthStore()
+  const { isLoggedIn, user } = useAuthStore()
 
   const { data: books, isLoading } = useQuery({
     queryKey: ['bookshelf', 'READING'],
-    queryFn: () => bookshelfApi.list('READING').then(r => r.data.data),
+    queryFn: () => bookshelfApi.list(user!.id, 'READING').then(r => r.data.data),
     enabled: isLoggedIn,
   })
 

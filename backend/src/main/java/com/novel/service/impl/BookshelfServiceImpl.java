@@ -1,101 +1,114 @@
 package com.novel.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.novel.dto.BookshelfVO;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.novel.entity.*;
 import com.novel.mapper.*;
 import com.novel.service.BookshelfService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
-public class BookshelfServiceImpl implements BookshelfService {
+public class BookshelfServiceImpl extends ServiceImpl<BookshelfMapper, Bookshelf> implements BookshelfService {
 
-    private final BookshelfMapper bookshelfMapper;
     private final NovelMapper novelMapper;
     private final ChapterMapper chapterMapper;
-    private final ReadingProgressMapper readingProgressMapper;
+    private final ReadingProgressMapper progressMapper;
+
+    public BookshelfServiceImpl(NovelMapper novelMapper, ChapterMapper chapterMapper,
+                                ReadingProgressMapper progressMapper) {
+        this.novelMapper = novelMapper;
+        this.chapterMapper = chapterMapper;
+        this.progressMapper = progressMapper;
+    }
 
     @Override
-    public List<BookshelfVO> list(Long userId, String category) {
+    public List<Map<String, Object>> list(Long userId, String category) {
         LambdaQueryWrapper<Bookshelf> wrapper = new LambdaQueryWrapper<Bookshelf>()
-                .eq(Bookshelf::getUserId, userId);
+                .eq(Bookshelf::getUserId, userId)
+                .orderByDesc(Bookshelf::getCreatedAt);
         if (category != null && !category.isBlank()) {
             wrapper.eq(Bookshelf::getCategory, category);
         }
-        List<Bookshelf> shelves = bookshelfMapper.selectList(wrapper);
-        List<BookshelfVO> vos = new ArrayList<>();
+        List<Bookshelf> shelves = list(wrapper);
+        if (shelves.isEmpty()) return Collections.emptyList();
+
+        List<Long> novelIds = shelves.stream().map(Bookshelf::getNovelId).distinct().toList();
+
+        // 小说信息
+        Map<Long, Novel> novelMap = novelMapper.selectBatchIds(novelIds)
+                .stream().collect(Collectors.toMap(Novel::getId, n -> n, (a, b) -> a));
+
+        // 阅读进度
+        List<ReadingProgress> progresses = progressMapper.selectList(
+                new LambdaQueryWrapper<ReadingProgress>()
+                        .eq(ReadingProgress::getUserId, userId)
+                        .in(ReadingProgress::getNovelId, novelIds));
+        Map<Long, ReadingProgress> progressMap = progresses.stream()
+                .collect(Collectors.toMap(ReadingProgress::getNovelId, p -> p, (a, b) -> a));
+
+        // 第一章
+        List<Chapter> firstChapters = chapterMapper.selectList(
+                new LambdaQueryWrapper<Chapter>()
+                        .in(Chapter::getNovelId, novelIds)
+                        .eq(Chapter::getChapterNo, 1));
+        Map<Long, Chapter> firstChMap = firstChapters.stream()
+                .collect(Collectors.toMap(Chapter::getNovelId, c -> c, (a, b) -> a));
+
+        List<Map<String, Object>> result = new ArrayList<>();
         for (Bookshelf s : shelves) {
-            Novel novel = novelMapper.selectById(s.getNovelId());
-            if (novel == null) continue;
-            BookshelfVO vo = new BookshelfVO();
-            vo.setId(s.getId());
-            vo.setNovelId(novel.getId());
-            vo.setNovelTitle(novel.getTitle());
-            vo.setNovelCover(novel.getCover());
-            vo.setNovelAuthor(novel.getAuthor());
-            vo.setNovelStatus(novel.getStatus());
-            vo.setCategory(s.getCategory());
-            Chapter latest = chapterMapper.selectList(new LambdaQueryWrapper<Chapter>()
-                    .eq(Chapter::getNovelId, novel.getId())
-                    .orderByDesc(Chapter::getChapterNo).last("LIMIT 1"))
-                    .stream().findFirst().orElse(null);
-            if (latest != null) {
-                vo.setLatestChapterNo(latest.getChapterNo());
-                vo.setLatestChapterTitle(latest.getTitle());
-            }
-            // 查询第一章ID（用于无进度时跳转）
-            Chapter first = chapterMapper.selectList(new LambdaQueryWrapper<Chapter>()
-                    .eq(Chapter::getNovelId, novel.getId())
-                    .orderByAsc(Chapter::getChapterNo).last("LIMIT 1"))
-                    .stream().findFirst().orElse(latest);
-            if (first != null) {
-                vo.setFirstChapterId(first.getId());
-            }
-            ReadingProgress progress = readingProgressMapper.selectOne(new LambdaQueryWrapper<ReadingProgress>()
-                    .eq(ReadingProgress::getUserId, userId)
-                    .eq(ReadingProgress::getNovelId, novel.getId()));
-            if (progress != null) {
-                vo.setProgress("第" + progress.getChapterNo() + "章");
-                vo.setProgressChapterNo(progress.getChapterNo());
-                vo.setProgressChapterId(progress.getChapterId());
-            }
-            vos.add(vo);
+            Novel n = novelMap.get(s.getNovelId());
+            if (n == null) continue;
+            ReadingProgress p = progressMap.get(s.getNovelId());
+            Chapter fc = firstChMap.get(s.getNovelId());
+
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", s.getId());
+            item.put("novelId", s.getNovelId());
+            item.put("novelTitle", n.getTitle());
+            item.put("novelCover", n.getCover());
+            item.put("novelAuthor", n.getAuthor());
+            item.put("novelStatus", n.getStatus());
+            item.put("category", s.getCategory());
+            item.put("progressChapterNo", p != null ? p.getChapterNo() : null);
+            item.put("progressChapterId", p != null ? p.getChapterId() : null);
+            item.put("firstChapterId", fc != null ? fc.getId() : null);
+            item.put("latestChapterNo", p != null ? p.getChapterId() : (fc != null ? fc.getId() : null));
+            item.put("latestChapterTitle", p != null ? "第" + p.getChapterNo() + "章" : null);
+            if (p != null) item.put("progress", "第" + p.getChapterNo() + "章");
+
+            result.add(item);
         }
-        return vos;
+        return result;
     }
 
     @Override
+    @Transactional
     public void add(Long userId, Long novelId) {
-        if (bookshelfMapper.selectCount(new LambdaQueryWrapper<Bookshelf>()
-                .eq(Bookshelf::getUserId, userId)
-                .eq(Bookshelf::getNovelId, novelId)) > 0) {
-            throw new RuntimeException("已在书架中");
+        Bookshelf exist = getOne(new LambdaQueryWrapper<Bookshelf>()
+                .eq(Bookshelf::getUserId, userId).eq(Bookshelf::getNovelId, novelId));
+        if (exist == null) {
+            Bookshelf bs = new Bookshelf();
+            bs.setUserId(userId);
+            bs.setNovelId(novelId);
+            bs.setCategory("READING");
+            save(bs);
         }
-        Bookshelf shelf = new Bookshelf();
-        shelf.setUserId(userId);
-        shelf.setNovelId(novelId);
-        shelf.setCategory("READING");
-        bookshelfMapper.insert(shelf);
     }
 
     @Override
-    public void updateCategory(Long userId, Long id, String category) {
-        Bookshelf shelf = bookshelfMapper.selectById(id);
-        if (shelf == null || !shelf.getUserId().equals(userId))
-            throw new RuntimeException("记录不存在");
-        shelf.setCategory(category);
-        bookshelfMapper.updateById(shelf);
+    public void update(Long id, String category) {
+        update(new LambdaUpdateWrapper<Bookshelf>()
+                .eq(Bookshelf::getId, id).set(Bookshelf::getCategory, category));
     }
 
     @Override
     public void remove(Long userId, Long novelId) {
-        bookshelfMapper.delete(new LambdaQueryWrapper<Bookshelf>()
-                .eq(Bookshelf::getUserId, userId)
-                .eq(Bookshelf::getNovelId, novelId));
+        remove(new LambdaQueryWrapper<Bookshelf>()
+                .eq(Bookshelf::getUserId, userId).eq(Bookshelf::getNovelId, novelId));
     }
 }

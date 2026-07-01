@@ -13,5 +13,5 @@ public class Bookshelf {
     private Long novelId;
     private String category;
     @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createTime;
+    private LocalDateTime createdAt;
 }

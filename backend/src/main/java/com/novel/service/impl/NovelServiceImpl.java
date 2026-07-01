@@ -2,64 +2,87 @@ package com.novel.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.novel.dto.NovelDTO;
-import com.novel.dto.PageResult;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.novel.common.PageResult;
+import com.novel.dto.NovelQuery;
 import com.novel.entity.*;
 import com.novel.mapper.*;
 import com.novel.service.NovelService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
-public class NovelServiceImpl implements NovelService {
+public class NovelServiceImpl extends ServiceImpl<NovelMapper, Novel> implements NovelService {
 
-    private final NovelMapper novelMapper;
     private final CategoryMapper categoryMapper;
     private final NovelCategoryMapper novelCategoryMapper;
     private final ChapterMapper chapterMapper;
 
+    public NovelServiceImpl(CategoryMapper categoryMapper, NovelCategoryMapper ncMapper, ChapterMapper chapterMapper) {
+        this.categoryMapper = categoryMapper;
+        this.novelCategoryMapper = ncMapper;
+        this.chapterMapper = chapterMapper;
+    }
+
     @Override
-    public PageResult<NovelDTO> list(int page, int pageSize, Long categoryId, String keyword, String sort) {
+    public PageResult<Novel> list(NovelQuery query) {
         LambdaQueryWrapper<Novel> wrapper = new LambdaQueryWrapper<>();
-        if (categoryId != null) {
+
+        // 分类筛选
+        if (query.getCategoryId() != null) {
             List<Long> novelIds = novelCategoryMapper.selectList(
-                    new LambdaQueryWrapper<NovelCategory>().eq(NovelCategory::getCategoryId, categoryId))
+                    new LambdaQueryWrapper<NovelCategory>()
+                            .eq(NovelCategory::getCategoryId, query.getCategoryId()))
                     .stream().map(NovelCategory::getNovelId).toList();
             if (novelIds.isEmpty()) {
-                return new PageResult<>(List.of(), 0, page, pageSize);
+                return PageResult.of(Collections.emptyList(), 0, query.getPage(), query.getPageSize());
             }
             wrapper.in(Novel::getId, novelIds);
         }
-        if (keyword != null && !keyword.isBlank()) {
-            wrapper.and(w -> w.like(Novel::getTitle, keyword).or().like(Novel::getAuthor, keyword));
+
+        // 关键词搜索
+        if (query.getKeyword() != null && !query.getKeyword().isBlank()) {
+            wrapper.and(w -> w.like(Novel::getTitle, query.getKeyword())
+                    .or().like(Novel::getAuthor, query.getKeyword()));
         }
-        if ("click".equals(sort)) wrapper.orderByDesc(Novel::getClickCount);
-        else if ("new".equals(sort)) wrapper.orderByDesc(Novel::getUpdateTime);
-        else wrapper.orderByDesc(Novel::getCollectCount);
 
-        Page<Novel> p = novelMapper.selectPage(new Page<>(page, pageSize), wrapper);
-        List<NovelDTO> list = p.getRecords().stream().map(this::toDTO).collect(Collectors.toList());
-        return new PageResult<>(list, p.getTotal(), page, pageSize);
+        // 排序
+        if ("hot".equals(query.getSort())) {
+            wrapper.orderByDesc(Novel::getClickCount);
+        } else if ("collect".equals(query.getSort())) {
+            wrapper.orderByDesc(Novel::getCollectCount);
+        } else {
+            wrapper.orderByDesc(Novel::getUpdatedAt);
+        }
+
+        Page<Novel> page = page(new Page<>(query.getPage(), query.getPageSize()), wrapper);
+
+        // 加载分类名
+        if (!page.getRecords().isEmpty()) {
+            Map<Long, List<String>> catMap = loadCategoryMap(
+                    page.getRecords().stream().map(Novel::getId).toList());
+            // 使用 transient 或直接 ignore - 这里简单处理：不设置 categories 到 entity
+            // 由 Controller 层进行转换
+        }
+
+        return PageResult.of(page.getRecords(), page.getTotal(), query.getPage(), query.getPageSize());
     }
 
     @Override
-    public NovelDTO detail(Long id) {
-        Novel novel = novelMapper.selectById(id);
+    public Novel detail(Long id) {
+        Novel novel = getById(id);
         if (novel == null) throw new RuntimeException("小说不存在");
-        novel.setClickCount(novel.getClickCount() + 1);
-        novelMapper.updateById(novel);
-        return toDTO(novel);
+        // 更新点击量
+        novel.setClickCount(novel.getClickCount() == null ? 1 : novel.getClickCount() + 1);
+        updateById(novel);
+        return novel;
     }
 
     @Override
-    public List<NovelDTO> hot() {
-        List<Novel> novels = novelMapper.selectList(
-                new LambdaQueryWrapper<Novel>().orderByDesc(Novel::getClickCount).last("LIMIT 10"));
-        return novels.stream().map(this::toDTO).collect(Collectors.toList());
+    public List<Novel> hot() {
+        return list(new LambdaQueryWrapper<Novel>().orderByDesc(Novel::getClickCount).last("LIMIT 10"));
     }
 
     @Override
@@ -67,31 +90,19 @@ public class NovelServiceImpl implements NovelService {
         return categoryMapper.selectList(new LambdaQueryWrapper<Category>().orderByAsc(Category::getSort));
     }
 
-    private NovelDTO toDTO(Novel novel) {
-        NovelDTO dto = new NovelDTO();
-        dto.setId(novel.getId());
-        dto.setTitle(novel.getTitle());
-        dto.setAuthor(novel.getAuthor());
-        dto.setCover(novel.getCover());
-        dto.setIntro(novel.getIntro());
-        dto.setWordCount(novel.getWordCount());
-        dto.setStatus(novel.getStatus());
-        dto.setClickCount(novel.getClickCount());
-        dto.setCollectCount(novel.getCollectCount());
-        dto.setUpdateTime(novel.getUpdateTime());
-        List<Long> catIds = novelMapper.selectCategoryIds(novel.getId());
-        if (!catIds.isEmpty()) {
-            dto.setCategories(categoryMapper.selectBatchIds(catIds).stream()
-                    .map(Category::getName).collect(Collectors.toList()));
+    /** 批量加载小说分类名 */
+    public Map<Long, List<String>> loadCategoryMap(List<Long> novelIds) {
+        if (novelIds.isEmpty()) return Map.of();
+        List<NovelCategory> ncs = novelCategoryMapper.selectList(
+                new LambdaQueryWrapper<NovelCategory>().in(NovelCategory::getNovelId, novelIds));
+        Set<Long> catIds = ncs.stream().map(NovelCategory::getCategoryId).collect(Collectors.toSet());
+        Map<Long, String> catNameMap = categoryMapper.selectBatchIds(catIds)
+                .stream().collect(Collectors.toMap(Category::getId, Category::getName));
+        Map<Long, List<String>> result = new HashMap<>();
+        for (NovelCategory nc : ncs) {
+            result.computeIfAbsent(nc.getNovelId(), k -> new ArrayList<>())
+                    .add(catNameMap.getOrDefault(nc.getCategoryId(), ""));
         }
-        Chapter latest = chapterMapper.selectList(new LambdaQueryWrapper<Chapter>()
-                .eq(Chapter::getNovelId, novel.getId())
-                .orderByDesc(Chapter::getChapterNo).last("LIMIT 1"))
-                .stream().findFirst().orElse(null);
-        if (latest != null) {
-            dto.setLatestChapter(latest.getTitle());
-            dto.setLatestChapterId(latest.getId());
-        }
-        return dto;
+        return result;
     }
 }

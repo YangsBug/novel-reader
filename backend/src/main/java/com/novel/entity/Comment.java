@@ -12,8 +12,8 @@ public class Comment {
     private Long userId;
     private Long novelId;
     private String content;
-    private Long likeCount;
+    private Integer likeCount;
     private Long parentId;
     @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createTime;
+    private LocalDateTime createdAt;
 }

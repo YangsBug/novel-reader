@@ -11,14 +11,13 @@ public class User {
     private Long id;
     private String username;
     private String password;
-    private String email;
-    private String avatar;
     private String nickname;
+    private String avatar;
     private Integer gender;
     private String intro;
     private Integer status;
     @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createTime;
+    private LocalDateTime createdAt;
     @TableField(fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updateTime;
+    private LocalDateTime updatedAt;
 }

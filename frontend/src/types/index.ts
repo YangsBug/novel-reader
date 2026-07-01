@@ -51,7 +51,7 @@ export interface Bookshelf {
   novelTitle: string
   novelCover: string
   novelAuthor: string
-  novelStatus: string
+  novelStatus?: string
   category: 'READING' | 'WANT_READ' | 'READ'
   latestChapterNo?: number
   latestChapterTitle?: string
@@ -70,6 +70,7 @@ export interface Comment {
   content: string
   likeCount: number
   liked: boolean
+  parentId?: number
   createTime: string
   replies?: Comment[]
 }
@@ -100,6 +101,7 @@ export interface PageResult<T> {
   total: number
   page: number
   pageSize: number
+  totalPages?: number
 }
 
 export interface ApiResult<T> {

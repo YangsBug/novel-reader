@@ -9,32 +9,33 @@ import Loading from '@/components/common/Loading'
 
 export default function ProfilePage() {
   const navigate = useNavigate()
-  const { logout, isLoggedIn } = useAuthStore()
+  const { logout, isLoggedIn, user } = useAuthStore()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ nickname: '', email: '', intro: '' })
 
-  const { data: user, isLoading } = useQuery({
+  const { data: profileData, isLoading } = useQuery({
     queryKey: ['profile'],
-    queryFn: () => userApi.profile().then(r => r.data.data),
+    queryFn: () => userApi.profile(user!.id).then(r => r.data.data),
     enabled: isLoggedIn,
   })
 
   const { data: stats } = useQuery({
     queryKey: ['user-stats'],
-    queryFn: () => userApi.stats().then(r => r.data.data),
+    queryFn: () => userApi.stats(user!.id).then(r => r.data.data),
     enabled: isLoggedIn,
   })
 
   const updateMut = useMutation({
-    mutationFn: (data: typeof form) => userApi.update(data),
+    mutationFn: (data: typeof form) => userApi.update(user!.id, data),
     onSuccess: () => { toast.success('更新成功'); queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditing(false) },
     onError: (e: any) => toast.error(e.response?.data?.message || '更新失败'),
   })
 
   const startEdit = () => {
     if (!user) return
-    setForm({ nickname: user.nickname || '', email: user.email || '', intro: user.intro || '' })
+    const data = profileData || user
+    setForm({ nickname: data.nickname || '', email: data.email || '', intro: data.intro || '' })
     setEditing(true)
   }
 
@@ -52,6 +53,8 @@ export default function ProfilePage() {
     { label: '想读', value: stats?.wantBooks ?? '-', color: '#a78bfa' },
   ]
 
+  const displayUser = profileData || user
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-2xl mx-auto">
       <h2 className="text-xl font-bold mb-8 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
@@ -63,10 +66,10 @@ export default function ProfilePage() {
       <div className="text-center mb-8">
         <div className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl font-bold text-white"
           style={{ background: `linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))` }}>
-          {user.nickname?.[0] || user.username[0]}
+          {displayUser.nickname?.[0] || displayUser.username[0]}
         </div>
-        <h3 className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>{user.nickname || user.username}</h3>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{user.email || '未绑定邮箱'}</p>
+        <h3 className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>{displayUser.nickname || displayUser.username}</h3>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{displayUser.email || '未绑定邮箱'}</p>
       </div>
 
       {/* 阅读统计 */}
@@ -112,10 +115,10 @@ export default function ProfilePage() {
           </div>
         ) : (
           <div className="space-y-3 text-sm">
-            <div className="flex"><span className="w-16" style={{ color: 'var(--text-muted)' }}>用户名</span><span style={{ color: 'var(--text-primary)' }}>{user.username}</span></div>
-            <div className="flex"><span className="w-16" style={{ color: 'var(--text-muted)' }}>昵称</span><span style={{ color: 'var(--text-primary)' }}>{user.nickname || '-'}</span></div>
-            <div className="flex"><span className="w-16" style={{ color: 'var(--text-muted)' }}>邮箱</span><span style={{ color: 'var(--text-primary)' }}>{user.email || '-'}</span></div>
-            <div className="flex"><span className="w-16" style={{ color: 'var(--text-muted)' }}>简介</span><span style={{ color: 'var(--text-primary)' }}>{user.intro || '-'}</span></div>
+            <div className="flex"><span className="w-16" style={{ color: 'var(--text-muted)' }}>用户名</span><span style={{ color: 'var(--text-primary)' }}>{displayUser.username}</span></div>
+            <div className="flex"><span className="w-16" style={{ color: 'var(--text-muted)' }}>昵称</span><span style={{ color: 'var(--text-primary)' }}>{displayUser.nickname || '-'}</span></div>
+            <div className="flex"><span className="w-16" style={{ color: 'var(--text-muted)' }}>邮箱</span><span style={{ color: 'var(--text-primary)' }}>{displayUser.email || '-'}</span></div>
+            <div className="flex"><span className="w-16" style={{ color: 'var(--text-muted)' }}>简介</span><span style={{ color: 'var(--text-primary)' }}>{displayUser.intro || '-'}</span></div>
           </div>
         )}
       </div>

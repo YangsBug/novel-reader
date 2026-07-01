@@ -1,14 +1,11 @@
 package com.novel.controller;
 
 import com.novel.common.Result;
-import com.novel.dto.BookmarkDTO;
-import com.novel.entity.Bookmark;
+import com.novel.dto.BookmarkRequest;
 import com.novel.service.BookmarkService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/bookmarks")
@@ -18,22 +15,21 @@ public class BookmarkController {
     private final BookmarkService bookmarkService;
 
     @GetMapping
-    public Result<List<Bookmark>> list(Authentication auth, @RequestParam Long novelId) {
-        Long userId = Long.parseLong(auth.getName());
+    public Result<?> list(Authentication auth, @RequestParam Long novelId) {
+        Long userId = (Long) auth.getPrincipal();
         return Result.ok(bookmarkService.list(userId, novelId));
     }
 
     @PostMapping
-    public Result<?> add(Authentication auth, @RequestBody BookmarkDTO dto) {
-        Long userId = Long.parseLong(auth.getName());
-        bookmarkService.add(userId, dto);
+    public Result<?> add(Authentication auth, @RequestBody BookmarkRequest request) {
+        Long userId = (Long) auth.getPrincipal();
+        bookmarkService.add(userId, request);
         return Result.ok();
     }
 
     @DeleteMapping("/{id}")
-    public Result<?> remove(Authentication auth, @PathVariable Long id) {
-        Long userId = Long.parseLong(auth.getName());
-        bookmarkService.remove(userId, id);
+    public Result<?> remove(@PathVariable Long id) {
+        bookmarkService.remove(id);
         return Result.ok();
     }
 }

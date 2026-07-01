@@ -16,5 +16,5 @@ public class Bookmark {
     private Integer pageOffset;
     private String note;
     @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createTime;
+    private LocalDateTime createdAt;
 }

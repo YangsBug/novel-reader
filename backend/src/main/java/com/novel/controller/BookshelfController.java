@@ -1,7 +1,6 @@
 package com.novel.controller;
 
 import com.novel.common.Result;
-import com.novel.dto.BookshelfVO;
 import com.novel.service.BookshelfService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -18,30 +17,28 @@ public class BookshelfController {
     private final BookshelfService bookshelfService;
 
     @GetMapping
-    public Result<List<BookshelfVO>> list(Authentication auth,
-                                           @RequestParam(required = false) String category) {
-        Long userId = Long.parseLong(auth.getName());
+    public Result<List<Map<String, Object>>> list(Authentication auth,
+                                                   @RequestParam(required = false) String category) {
+        Long userId = (Long) auth.getPrincipal();
         return Result.ok(bookshelfService.list(userId, category));
     }
 
     @PostMapping
     public Result<?> add(Authentication auth, @RequestBody Map<String, Long> body) {
-        Long userId = Long.parseLong(auth.getName());
+        Long userId = (Long) auth.getPrincipal();
         bookshelfService.add(userId, body.get("novelId"));
         return Result.ok();
     }
 
     @PutMapping("/{id}")
-    public Result<?> update(Authentication auth, @PathVariable Long id,
-                             @RequestBody Map<String, String> body) {
-        Long userId = Long.parseLong(auth.getName());
-        bookshelfService.updateCategory(userId, id, body.get("category"));
+    public Result<?> update(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        bookshelfService.update(id, body.get("category"));
         return Result.ok();
     }
 
     @DeleteMapping("/{novelId}")
     public Result<?> remove(Authentication auth, @PathVariable Long novelId) {
-        Long userId = Long.parseLong(auth.getName());
+        Long userId = (Long) auth.getPrincipal();
         bookshelfService.remove(userId, novelId);
         return Result.ok();
     }

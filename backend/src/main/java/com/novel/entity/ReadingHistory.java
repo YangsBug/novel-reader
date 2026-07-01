@@ -13,7 +13,6 @@ public class ReadingHistory {
     private Long novelId;
     private Long chapterId;
     private Integer chapterNo;
-    private Integer isCurrent;
     @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createTime;
+    private LocalDateTime createdAt;
 }
